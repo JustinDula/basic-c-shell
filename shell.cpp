@@ -8,64 +8,82 @@
 #include <sys/wait.h>
 #include <cstring>
 
-#define MAXARGS 32
-#define MAXARGLEN 128
-
 using namespace std;
 
-void parent_sighand(int sig)
+istream& getinput(string &line);
+bool builtins(vector< const char * > argv);
+int parse(string line, vector< const char* > &args);
+int run (vector< const char * > args);
+void printargs(vector<const char *> a);
+void child_sighand(int sig);
+void main_loop();
+
+int main(int argc, char ** argv)
 {
-	// does nothing for now
-}
 
-void child_sighand(int sig)
-{
-	exit(EXIT_FAILURE);
-}
-
-istream& getinput(string &l)
-{
-	//char temp[WD_MAXLEN];
-	//getcwd(temp, WD_MAXLEN);
-	//cout << temp << "$ ";
-	
-	cout << "$$ ";
-	return getline(cin, l);
-}
-
-int parse(string line, char* args[MAXARGS])
-{
-	stringstream ss(line);
-	string t;
-	//char* temp;
-	
-	int i = 0;
-	while (ss >> t//emp
-		&& i < MAXARGS)
-	{
-		args[i] = &t[0];//emp; 
-
-		//temp = new char;
-		++i;
-	}
-	
-	/*
-	for (int ii = 0; ii < i; ++ii)
-		cout << args[ii] << " ";
-
-	 cout << endl; // */
-
-	// for debugging purposes
-	//for (int j = 0; j <= i; ++j) cout << args[j] << " "; cout << endl;
-	
-	/*	
-	for ( ; i < MAXARGS; ++i)
-		args[i] = 0;//*/
+	cout << flush;
+	cerr << flush;
+	main_loop();
 	
 	return 0;
 }
 
-int run (char ** args)
+void main_loop()
+{
+
+	string line;
+	int status;
+	while (getinput(line))
+	{		
+		vector<const char *> argv;
+		parse(line, argv);
+		//cout << argv[0] << endl << argv[1] << endl;
+		printargs(argv);
+		if (argv[0] != 0) 
+			if (! builtins(argv))
+				status = run(argv);
+		
+	}
+}
+
+int parse(string line, vector<const char* > &args)
+{
+	stringstream ss(line);
+	string t;
+	
+	args.clear();
+	
+	int i = 0;
+	while (ss >> t)
+	{
+		char * push = new char[t.size() + 1];
+		strcpy(push, t.c_str());
+		args.push_back(push);
+		++i;
+	}
+	
+	return 0;
+}
+
+bool builtins(vector< const char * > argv)
+{
+	if (strcmp(argv[0], "exit") == 0)
+	{
+		exit(EXIT_SUCCESS);
+		return true;
+	}
+	else if (strcmp(argv[0], "cd") == 0)
+	{
+		if (argv.size() < 2)
+			cerr << "Directory required.\n";
+		else
+			chdir(argv[1]);
+		return true;
+	}
+	return false;
+}
+
+int run (vector< const char * > args)
 {
 	pid_t pid;
 	int status;
@@ -75,7 +93,7 @@ int run (char ** args)
 	{
 		// child process
 		signal(SIGUSR1, child_sighand); 
-		if (execvp(args[0], args) == -1)
+		if (execvp(args[0], (char**) args.data()) == -1)
 			cerr << "Error: execvp failed.\n";
 		//free(args);
 		exit(EXIT_FAILURE);
@@ -94,50 +112,34 @@ int run (char ** args)
 	return 1;
 }
 
-bool builtins(char * argv[MAXARGS])
+
+
+istream& getinput(string &l)
 {
-	if (strcmp(argv[0], "exit") == 0)
-	{
-		exit(EXIT_SUCCESS);
-		return true;
-	}
-	else if (strcmp(argv[0], "cd") == 0)
-	{
-		if (argv[1] == 0)
-			cerr << "Directory required.\n";
-		else
-			chdir(argv[1]);
-		return true;
-	}
-	return false;
+	//char temp[WD_MAXLEN];
+	//getcwd(temp, WD_MAXLEN);
+	//cout << temp << "$ ";
+	
+	cout << "$$ ";
+	return getline(cin, l);
 }
 
-void main_loop()
+void printargs(vector<const char *> argv)
 {
-
-	string line;
-	int status;
-	char * argv[MAXARGS];
-	while (getinput(line))
-	{		
-		//char * argv[MAXARGS];
-		parse(line, argv);
-		//cout << argv[0] << endl << argv[1] << endl;
-		if (argv[0] != 0) 
-			if (! builtins(argv))
-				status = run(argv);
-		
-	}
+	cout << "ARGS: ";
+	for (int i = 0; i < argv.size() ; ++i)
+		cout << argv[i] << " ";
+	cout << endl;
 }
 
-int main(int argc, char ** argv)
+void parent_sighand(int sig)
 {
-	
-	cout << flush;
-	cerr << flush;
-	main_loop();
-	
-	return 0;
+	// does nothing for now
+}
+
+void child_sighand(int sig)
+{
+	exit(EXIT_FAILURE);
 }
 
 

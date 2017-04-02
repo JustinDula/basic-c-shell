@@ -36,15 +36,16 @@ istream& getinput(string &l)
 int parse(string line, char* args[MAXARGS])
 {
 	stringstream ss(line);
-	//string t;
-	char* temp;
+	string t;
+	//char* temp;
 	
 	int i = 0;
-	while (ss >> temp
+	while (ss >> t//emp
 		&& i < MAXARGS)
 	{
-		args[i] = temp; 
-		temp = new char;
+		args[i] = &t[0];//emp; 
+
+		//temp = new char;
 		++i;
 	}
 	
@@ -73,11 +74,11 @@ int run (char ** args)
 	if (pid == 0)
 	{
 		// child process
+		signal(SIGUSR1, child_sighand); 
 		if (execvp(args[0], args) == -1)
 			cerr << "Error: execvp failed.\n";
 		//free(args);
-
-		signal(SIGUSR1, child_sighand); 
+		exit(EXIT_FAILURE);
 	} 
 	else if (pid < 0)
 	{
@@ -116,10 +117,10 @@ void main_loop()
 
 	string line;
 	int status;
-	
+	char * argv[MAXARGS];
 	while (getinput(line))
 	{		
-		char * argv[MAXARGS];
+		//char * argv[MAXARGS];
 		parse(line, argv);
 		//cout << argv[0] << endl << argv[1] << endl;
 		if (argv[0] != 0) 

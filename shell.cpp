@@ -12,44 +12,44 @@ using namespace std;
 
 istream& getinput(string &line);
 bool builtins(vector< const char * > argv);
-int parse(string line, vector< const char* > &args);
-int run (vector< const char * > args);
+vector<const char *> parse_to_vector(string line);
+int start_full_command (vector< const char * > args);
 void printargs(vector<const char *> a);
 void child_sighand(int sig);
-void main_loop();
+void parent_sighand(int sig);
+vector < vector<const char *> > split_on_pipes(vector<const char *> args);
+int spawn_single_command(int i_ID, int o_ID, vector<const char *> argv);
+int fork_commands(vector < vector < const char * > > commands);
+int execvec(vector<const char *> argv);
 
 int main(int argc, char ** argv)
 {
 
 	cout << flush;
 	cerr << flush;
-	main_loop();
 	
-	return 0;
-}
-
-void main_loop()
-{
-
 	string line;
 	int status;
 	while (getinput(line))
 	{		
-		vector<const char *> argv;
-		parse(line, argv);
-		//cout << argv[0] << endl << argv[1] << endl;
-		printargs(argv);
+		vector<const char *> argv = parse_to_vector(line);
+		//printargs(argv);
 		if (argv[0] != 0) 
 			if (! builtins(argv))
-				status = run(argv);
+				status = start_full_command(argv);
 		
 	}
+	
+	return 0;
 }
 
-int parse(string line, vector<const char* > &args)
+// parses the line and fills the given vector with its contents
+vector<const char *> parse_to_vector(string line)
 {
 	stringstream ss(line);
 	string t;
+	
+	vector<const char *> args;
 	
 	args.clear();
 	
@@ -62,7 +62,7 @@ int parse(string line, vector<const char* > &args)
 		++i;
 	}
 	
-	return 0;
+	return args;
 }
 
 bool builtins(vector< const char * > argv)
@@ -83,19 +83,77 @@ bool builtins(vector< const char * > argv)
 	return false;
 }
 
-int run (vector< const char * > args)
+int execvec(vector<const char *> argv)
+{
+	//cout << "E"; printargs(argv);
+	if (execvp(argv[0], (char**) argv.data()) == -1)
+	{
+			cerr << "Error: execvp failed.\n";
+			return -1;
+	}
+	return 0;
+}
+
+int spawn_single_command(int i_ID, int o_ID, vector<const char *> argv)
+{
+	pid_t pid = fork();
+	if (pid == 0)
+	{
+		if (i_ID != 0)
+		{
+			dup2(i_ID, 0);
+			close(i_ID);
+		}
+		if (o_ID != 1)
+		{
+			dup2(o_ID, 1);
+			close(o_ID);
+		}
+		
+		return execvec(argv);
+	}
+	
+	return pid;
+}
+
+int fork_commands(vector < vector < const char * > > commands)
+{
+	pid_t pid;
+	int i_ID = 0, fd[2];
+	
+	int i;
+	for (i = 0; i < commands.size() - 1; ++i)
+	{
+		pipe(fd);
+		spawn_single_command(i_ID, fd[1], commands[i]);
+		close(fd[1]);
+		i_ID = fd[0];
+	}
+	
+	if (i_ID) // if it's not zero
+		dup2 (i_ID, 0);
+	
+	return execvec(commands[i]);
+}
+
+int start_full_command (vector< const char * > args)
 {
 	pid_t pid;
 	int status;
 	
+	signal(SIGUSR1, parent_sighand);
+
 	pid = fork();
 	if (pid == 0)
 	{
 		// child process
+		vector < vector < const char * > > commands = split_on_pipes(args);
+		
+		//for (unsigned int i = 0; i < commands.size(); ++i) printargs(commands[i]);
+		
 		signal(SIGUSR1, child_sighand); 
-		if (execvp(args[0], (char**) args.data()) == -1)
-			cerr << "Error: execvp failed.\n";
-		//free(args);
+		fork_commands(commands);
+		
 		exit(EXIT_FAILURE);
 	} 
 	else if (pid < 0)
@@ -103,16 +161,30 @@ int run (vector< const char * > args)
 		// fork failed
 		cerr << "Error: Fork failed.\n";
 	}
-	else
-	{
-		// parent process
-		waitpid(pid, &status, WUNTRACED);
-	}
+	
+	if ((pid =waitpid(pid, &status, 0)) < 0)
+		cerr << "Error: failure while waiting for child to complete.\n";
+		
+	signal(SIGINT, SIG_DFL);
 	
 	return 1;
 }
 
+vector < vector<const char *> > split_on_pipes(vector<const char *> args)
+{
+	vector< vector <const char * > > commands;
+	commands.push_back(*(new vector<const char *>));
+	for (int i = 0; i < args.size(); ++i)
+	{
+		if (strcmp(args[i], "|") == 0)
+			commands.push_back(*(new vector<const char *>));
+		else
+			commands.back().push_back(args[i]);
+	}
+			
 
+	return commands;
+}
 
 istream& getinput(string &l)
 {
@@ -141,5 +213,3 @@ void child_sighand(int sig)
 {
 	exit(EXIT_FAILURE);
 }
-
-

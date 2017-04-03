@@ -104,9 +104,11 @@ int execvec(vector<const char *> argv)
 	// were an even, nonzero number of arguments past the command
 	if (argv.size() > 2 || argv.size() % 2 == 1)
 		argv.push_back((const char*)0);
+	
 	if (execvp(argv[0], (char**) argv.data()) == -1)
 	{
 			cerr << "Error: execvp failed.\n";
+			exit(EXIT_FAILURE);
 			return -1;
 	}
 	return 0;
@@ -142,26 +144,36 @@ int fork_commands(vector < vector < const char * > > commands, int redirect, con
 	
 	if (redirect == REDIRECT_IN)
 	{
-		int fid = open(redirectLocation, O_RDONLY);
-		dup2(fid, STD_IN);
-		close(fid);
+		int i_ID = open(redirectLocation, O_RDONLY);
+		dup2(i_ID, STD_IN);
+		close(i_ID);
 	}
-
+	
+	
 	int i_ID;
 	int i = 0;
 	for ( ; i < commands.size() - 1; ++i)
 	{
 		pipe(fd);
+		//cout << fd[0] << "-" << fd[1] << endl;
 		spawn_single_command(i_ID, fd[1], commands[i]);
 		close(fd[1]);
 		i_ID = fd[0];
 	}
 	
-	if (i_ID) // if it's not zero
-		dup2 (i_ID, 0);
+	if (i_ID) // if the output of the previous is not standard input
+	{
+		dup2 (i_ID, STD_IN);
+	}
 	
-	
-	
+	if (redirect == REDIRECT_APP || redirect == REDIRECT_OUT)
+	{
+		int o_ID = (redirect = REDIRECT_OUT) ?
+			open(redirectLocation, O_WRONLY | O_TRUNC | O_CREAT, 0666) :
+			open(redirectLocation, O_APPEND | O_CREAT, 0666);
+		dup2(o_ID, STD_OUT);
+		close(o_ID);
+	}
 	return execvec(commands[i]);
 }
 
@@ -191,7 +203,7 @@ int start_full_command (vector< const char * > args)
 			else if (strcmp(args[i], ">") == 0)
 				redirect = REDIRECT_OUT;
 			
-			cout << "RED" << redirect << endl;
+			//cout << "RED" << redirect << endl;
 			
 			if (redirect != REDIRECT_NO)
 			{

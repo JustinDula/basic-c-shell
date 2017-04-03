@@ -21,6 +21,8 @@
 
 using namespace std;
 
+
+// a clown fiesta of declarations
 istream& getinput(string &line);
 bool builtins(vector< const char * > argv);
 vector<const char *> parse_to_vector(string line);
@@ -36,6 +38,7 @@ int execvec(vector<const char *> argv);
 int main(int argc, char ** argv)
 {
 
+	// flush the outputs
 	cout << flush;
 	cerr << flush;
 	
@@ -80,11 +83,13 @@ vector<const char *> parse_to_vector(string line)
 // does exit and cd 
 bool builtins(vector< const char * > argv)
 {
+	// handle "exit"
 	if (strcmp(argv[0], "exit") == 0)
 	{
 		exit(EXIT_SUCCESS);
 		return true;
 	}
+	// handle "cd"
 	else if (strcmp(argv[0], "cd") == 0)
 	{
 		if (argv.size() != 2)
@@ -105,6 +110,7 @@ int execvec(vector<const char *> argv)
 	if (argv.size() > 2 || argv.size() % 2 == 1)
 		argv.push_back((const char*)0);
 	
+	// does the actual execution
 	if (execvp(argv[0], (char**) argv.data()) == -1)
 	{
 			cerr << "Error: execvp failed.\n";
@@ -118,6 +124,7 @@ int execvec(vector<const char *> argv)
 int spawn_single_command(int i_ID, int o_ID, vector<const char *> argv)
 {
 	pid_t pid = fork();
+	// updates the inputs and outputs to their appropriate values
 	if (pid == 0)
 	{
 		if (i_ID != 0)
@@ -142,6 +149,7 @@ int fork_commands(vector < vector < const char * > > commands, int redirect, con
 	pid_t pid;
 	int fd[2];
 	
+	// if there's input redirection
 	if (redirect == REDIRECT_IN)
 	{
 		int i_ID = open(redirectLocation, O_RDONLY);
@@ -152,6 +160,7 @@ int fork_commands(vector < vector < const char * > > commands, int redirect, con
 	
 	int i_ID;
 	int i = 0;
+	// for all but the last command
 	for ( ; i < commands.size() - 1; ++i)
 	{
 		pipe(fd);
@@ -166,14 +175,18 @@ int fork_commands(vector < vector < const char * > > commands, int redirect, con
 		dup2 (i_ID, STD_IN);
 	}
 	
+	// if there is file redirection
 	if (redirect == REDIRECT_APP || redirect == REDIRECT_OUT)
 	{
-		int o_ID = (redirect = REDIRECT_OUT) ?
-			open(redirectLocation, O_WRONLY | O_TRUNC | O_CREAT, 0666) :
-			open(redirectLocation, O_APPEND | O_CREAT, 0666);
+		int o_ID;
+		if (redirect == REDIRECT_OUT)
+			o_ID = open(redirectLocation, O_WRONLY | O_TRUNC | O_CREAT, 0666);
+		else
+			o_ID = open(redirectLocation, O_WRONLY | O_APPEND | O_CREAT, 0666);
 		dup2(o_ID, STD_OUT);
 		close(o_ID);
 	}
+	
 	return execvec(commands[i]);
 }
 
@@ -222,7 +235,6 @@ int start_full_command (vector< const char * > args)
 		
 		signal(SIGUSR1, child_sighand); 
 		fork_commands(commands, redirect, redirectLocation);
-		
 		exit(EXIT_FAILURE);
 	} 
 	else if (pid < 0)
@@ -231,6 +243,7 @@ int start_full_command (vector< const char * > args)
 		cerr << "Error: Fork failed.\n";
 	}
 	
+	// wait for the kiddo to finish
 	if ((pid =waitpid(pid, &status, 0)) < 0)
 		cerr << "Error: failure while waiting for child to complete.\n";
 		
@@ -247,11 +260,11 @@ vector < vector<const char *> > split_on_pipes(vector<const char *> args)
 	commands.push_back(*(new vector<const char *>));
 	for (int i = 0; i < args.size(); ++i)
 	{
-		if (strcmp(args[i], "|") == 0)
-			commands.push_back(*(new vector<const char *>));
+		if (strcmp(args[i], "|") == 0) // when it's a pipe
+			commands.push_back(*(new vector<const char *>)); // start the next set of commands
 		else
-			commands.back().push_back(args[i]);
-	}
+			commands.back().push_back(args[i]); // if it's not a pipe, just stick it in the last set of commands
+	} 
 			
 
 	return commands;
@@ -277,9 +290,10 @@ void printargs(vector<const char *> argv)
 	cout << endl;
 }
 
+// unneeded
 void parent_sighand(int sig)
 {
-	// does nothing for now
+	
 }
 
 void child_sighand(int sig)

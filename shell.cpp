@@ -65,6 +65,8 @@ vector<const char *> parse_to_vector(string line)
 	return args;
 }
 
+// checks if it's a builtin and does it 
+// does exit and cd 
 bool builtins(vector< const char * > argv)
 {
 	if (strcmp(argv[0], "exit") == 0)
@@ -74,8 +76,8 @@ bool builtins(vector< const char * > argv)
 	}
 	else if (strcmp(argv[0], "cd") == 0)
 	{
-		if (argv.size() < 2)
-			cerr << "Directory required.\n";
+		if (argv.size() != 2)
+			cerr << "CD must have exactly one argument";
 		else
 			chdir(argv[1]);
 		return true;
@@ -83,9 +85,16 @@ bool builtins(vector< const char * > argv)
 	return false;
 }
 
+// execvp's the given vector
 int execvec(vector<const char *> argv)
 {
-	//cout << "E"; printargs(argv);
+	printargs(argv);
+	
+	// please don't ask why this is necessary
+	// all i know is that if failed if there 
+	// were an even, nonzero number of arguments past the command
+	if (argv.size() > 2 || argv.size() % 2 == 1)
+		argv.push_back((const char*)0);
 	if (execvp(argv[0], (char**) argv.data()) == -1)
 	{
 			cerr << "Error: execvp failed.\n";
@@ -94,6 +103,7 @@ int execvec(vector<const char *> argv)
 	return 0;
 }
 
+// called by fork commands to do the single command
 int spawn_single_command(int i_ID, int o_ID, vector<const char *> argv)
 {
 	pid_t pid = fork();
@@ -116,6 +126,7 @@ int spawn_single_command(int i_ID, int o_ID, vector<const char *> argv)
 	return pid;
 }
 
+// forks off the individual commands as necessary
 int fork_commands(vector < vector < const char * > > commands)
 {
 	pid_t pid;
@@ -136,6 +147,7 @@ int fork_commands(vector < vector < const char * > > commands)
 	return execvec(commands[i]);
 }
 
+// starts the full command execution
 int start_full_command (vector< const char * > args)
 {
 	pid_t pid;
@@ -170,6 +182,8 @@ int start_full_command (vector< const char * > args)
 	return 1;
 }
 
+// splits the token vector to a vector of vectors
+// where each vector is what is between the pipes
 vector < vector<const char *> > split_on_pipes(vector<const char *> args)
 {
 	vector< vector <const char * > > commands;
@@ -186,6 +200,7 @@ vector < vector<const char *> > split_on_pipes(vector<const char *> args)
 	return commands;
 }
 
+// prints the prompt and gets the line of input
 istream& getinput(string &l)
 {
 	//char temp[WD_MAXLEN];
@@ -196,6 +211,7 @@ istream& getinput(string &l)
 	return getline(cin, l);
 }
 
+// prints out the arguments of the command vector passed in
 void printargs(vector<const char *> argv)
 {
 	cout << "ARGS: ";

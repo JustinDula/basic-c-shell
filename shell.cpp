@@ -2,11 +2,22 @@
 #include <iostream>
 #include <unistd.h>
 #include <stdlib.h>
+#include <stdio.h>
 #include <vector>
+#include <fcntl.h>
 #include <string>
 #include <sstream>
 #include <sys/wait.h>
 #include <cstring>
+
+#define REDIRECT_NO -1
+#define REDIRECT_IN 0
+#define REDIRECT_OUT 1
+#define REDIRECT_APP 2
+
+#define STD_IN 0
+#define STD_OUT 1
+#define STD_ERR 2
 
 using namespace std;
 
@@ -19,7 +30,7 @@ void child_sighand(int sig);
 void parent_sighand(int sig);
 vector < vector<const char *> > split_on_pipes(vector<const char *> args);
 int spawn_single_command(int i_ID, int o_ID, vector<const char *> argv);
-int fork_commands(vector < vector < const char * > > commands);
+int fork_commands(vector < vector < const char * > > commands, int redirect, const char* redirectLocation);
 int execvec(vector<const char *> argv);
 
 int main(int argc, char ** argv)
@@ -88,8 +99,6 @@ bool builtins(vector< const char * > argv)
 // execvp's the given vector
 int execvec(vector<const char *> argv)
 {
-	printargs(argv);
-	
 	// please don't ask why this is necessary
 	// all i know is that if failed if there 
 	// were an even, nonzero number of arguments past the command
@@ -119,7 +128,6 @@ int spawn_single_command(int i_ID, int o_ID, vector<const char *> argv)
 			dup2(o_ID, 1);
 			close(o_ID);
 		}
-		
 		return execvec(argv);
 	}
 	
@@ -127,13 +135,21 @@ int spawn_single_command(int i_ID, int o_ID, vector<const char *> argv)
 }
 
 // forks off the individual commands as necessary
-int fork_commands(vector < vector < const char * > > commands)
+int fork_commands(vector < vector < const char * > > commands, int redirect, const char* redirectLocation)
 {
 	pid_t pid;
-	int i_ID = 0, fd[2];
+	int fd[2];
 	
-	int i;
-	for (i = 0; i < commands.size() - 1; ++i)
+	if (redirect == REDIRECT_IN)
+	{
+		int fid = open(redirectLocation, O_RDONLY);
+		dup2(fid, STD_IN);
+		close(fid);
+	}
+
+	int i_ID;
+	int i = 0;
+	for ( ; i < commands.size() - 1; ++i)
 	{
 		pipe(fd);
 		spawn_single_command(i_ID, fd[1], commands[i]);
@@ -143,6 +159,8 @@ int fork_commands(vector < vector < const char * > > commands)
 	
 	if (i_ID) // if it's not zero
 		dup2 (i_ID, 0);
+	
+	
 	
 	return execvec(commands[i]);
 }
@@ -159,12 +177,39 @@ int start_full_command (vector< const char * > args)
 	if (pid == 0)
 	{
 		// child process
+		int redirect = REDIRECT_NO;
+		const char * redirectLocation = (const char*)0;
+		
+		if (args.size() >= 3)
+		{
+			int i = args.size() - 2;
+			
+			if (strcmp(args[i], "<") == 0)
+				redirect = REDIRECT_IN;
+			else if (strcmp(args[i], ">>") == 0)
+				redirect = REDIRECT_APP;
+			else if (strcmp(args[i], ">") == 0)
+				redirect = REDIRECT_OUT;
+			
+			cout << "RED" << redirect << endl;
+			
+			if (redirect != REDIRECT_NO)
+			{
+				redirectLocation = args.back();
+				
+				args.pop_back();
+				args.pop_back();
+			}
+		}
+		
+		// split to commands
 		vector < vector < const char * > > commands = split_on_pipes(args);
 		
 		//for (unsigned int i = 0; i < commands.size(); ++i) printargs(commands[i]);
+	
 		
 		signal(SIGUSR1, child_sighand); 
-		fork_commands(commands);
+		fork_commands(commands, redirect, redirectLocation);
 		
 		exit(EXIT_FAILURE);
 	} 
